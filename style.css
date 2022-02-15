@@ -1,6 +1,7 @@
 @import "node_modules/ol/ol.css";
 
-html, body {
+html,
+body {
   margin: 0;
   height: 100%;
 }
@@ -9,4 +10,8 @@ html, body {
   top: 0;
   bottom: 0;
   width: 100%;
+}
+
+.disney {
+  opacity: 0.9;
 }

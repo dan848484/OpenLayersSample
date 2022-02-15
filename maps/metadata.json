@@ -1,0 +1,13 @@
+{
+  "name": "maps",
+  "version": "1.1.0",
+  "description": "",
+  "attribution": "Rendered with <a href=\"https://www.maptiler.com/desktop/\">MapTiler Desktop</a>",
+  "type": "overlay",
+  "format": "png",
+  "minzoom": "13",
+  "maxzoom": "16",
+  "scale": "1.000000",
+  "bounds": [139.86595680, 35.61752142, 139.90462831, 35.64006025],
+  "profile": "mercator"
+}

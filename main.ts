@@ -13,13 +13,17 @@ import ImageStatic from "ol/source/ImageStatic";
 import VectorImageLayer from "ol/layer/VectorImage";
 import Polygon from "ol/geom/Polygon";
 import MultiPolygon from "ol/geom/MultiPolygon";
-import Image from "ol/layer/Image";
 import Projection from "ol/proj/Projection";
 import { fromLonLat } from "ol/src/proj";
+import { disneyImage } from "./imageData";
+import { Image, Tile } from "ol/layer";
+import { transformExtent } from "ol/proj/transforms";
+import XYZ from "ol/source/XYZ";
 
 //佐渡島を囲む座標
 const coordinates = [
   // 経度、緯度の順で定義
+  //【注意】最初と最後の座標は同じにならないといけない
   [138.247243, 38.317245],
   [138.184912, 38.173751],
   [138.0778591227916, 37.830986409949396],
@@ -29,42 +33,75 @@ const coordinates = [
   [138.247243, 38.317245],
 ];
 
+//東京ディズニーリゾートを取り囲む矩形
+const disneyCoordinates = [
+  [139.86605288747617, 35.63996853858424],
+  [139.86604639720952, 35.61776367832307],
+  [139.90449404938747, 35.61769049507307],
+  [139.90446611619558, 35.639954583440804],
+  [139.86605288747617, 35.63996853858424],
+];
+
 //佐渡島を囲む多角形
 const polyFeature = new Feature({
   geometry: new Polygon([coordinates]),
 });
 
-//webメルカルトへ変換
+//ディズニーを囲む多角形
+const disneyFeature = new Feature({
+  geometry: new Polygon([disneyCoordinates]),
+});
+
+//経度と緯度をwebメルカルトへ変換
 polyFeature.getGeometry().transform("EPSG:4326", "EPSG:3857");
+disneyFeature.getGeometry().transform("EPSG:4326", "EPSG:3857");
 
 //見た目を定義
 const styles = new Style({
   fill: new Fill({
-    color: "rgba(0,5,255,0.3)",
+    // color: "rgba(0,5,255,0.3)",
   }),
 });
 
 const vectorLayer = new VectorLayer({
   source: new VectorSource({
-    features: [polyFeature],
+    features: [polyFeature, disneyFeature],
   }),
   style: styles,
 });
 
-//画像の範囲  (座標の配列で、[left, bottom, right, top]の順になっている。）
-//fromLonLat()で経度緯度とwebメルカルトに変換。
+// 画像の範囲  (座標の配列で、[left(左下の座標の経度), bottom(左下の座標の緯度), right(右上の座標の経度), top(右上の座標の緯度)]の順になっている。）
+// fromLonLat()で経度緯度をwebメルカルトに変換。
 const imageExtent: number[] = fromLonLat([
-  139.8828797139343, 38.77523995472225,
-]).concat(fromLonLat([138.247243, 38.317245]));
+  139.86604639720952, 35.61776367832307,
+]).concat(fromLonLat([139.90446611619558, 35.639954583440804]));
 
 const imageLayer = new Image({
   source: new ImageStatic({
-    url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfUAAAIACAMAAACsIQUUAAABaFBMVEX////pQjU0qFNChfT6uwVDiPmIsviBrvjtQzZWkvU1q1X/vwVEiPr9vQU2rVX/vAB1xIpRtWzrTkL6vhFFsGIAp1VChPjsXFHvd205qlc0qU3rVEnpRTjxgXj3urZLi/UzqUPtZFnzmJHoOjb71Wb+67uJzJtlvX34wr7ubWNNs2n0n5j2sqzqSj3sUUXyj4f945380Vhwo/ay3r6j17HG589BiOjvdGn72tj96K5hmfebvvn93H9Rj/Z+x5G50vuX0qf5zcrqSzL8yDPsYC3yjB/83ov8xi6ryfrB1/veuBfP4PzW7dw+j9Ln7/3A5Mozqjo9ksU6m5/97Ov2q7fxilH3qw3ubCvxhyL1nhnveSb0lxz+9uT+8tXrVi/vcyjyhz6OtVa2sy35/P+BrkFcqkycsDtQqkyxsjPluRXPtiTu+PCPrkKjsTeQw3g5p384n4k2pWg8lbs5nJtAi+A4no87mK2Cs+b33XzWAAAXaElEQVR4nO2d+0MbV3bHhQT2ZAAhgXaFkASIriXES3bAi50ERdRdbxJT427a9JG4j2x32yRtd9O023+/MxICjTRP6Z57ztz5fvJT4kdm5sO995xzX7kcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEDaeHG4u3ty3Gs2q2PqLuN/aTWbB8cnu7uHL7gfFCjgy+vjZqtVrW4uWXcs+XH/i2fOT0CreXz9JfeDg7k47HW71UaYal/94x+ARrXV7R1yvwSIzWHzstVIJju4/Vcvt0+4XwiEc9zc3hz6Wsj3lPulpdNu84D71YAfh73t+qlS4R73S6dnlz20eknsHnQ3T2l8T5q3GmctmBfB9Um33iBq4n7ml+qtY0R5rFw3q+Rt3Ed9o7oN8Uzstuq62riP+bMu+nrtHHSpIrfY3q2lLiJ7jfS6DVbjYxzz3R73x8gGB9uNJQnKR1hLDbR4ak62NwUpH2FZm6jf0XF9UJfRs0/jRvUHmK6jYLe7KdH4GGvzEtmcag6qIlv5BO5UzTH3ZzKK7VPhykc4I3yT+1OZwklXejN/wBnhL6+5P5gBHFTFBe3hWI0WIvrF6NVT5tzFiegxwM9PT3TUHoK1VEV7n4/eWXrG8xngfS5S7dzFSeSQwCfD6dvT7dzFsroo2MXnuG6AcxfLuuT+lmnhpGqG8iFWA3WbGOy2UpirhWFtYiY2ghfbDbOcu1gI50M5SGuCHo7V2EZYF8Su+Hm1uUE3H8S2YQO6Byd75/6+EjkwcED3YFmI5qe4NilbC8Kq73J/Z1H0TG/oI6wlNPd7dqvcOrSBJG5MMxsNfQRqdUNeZGFEn8Sq49Ab40P3WaxG1nP3Vuacu1hd7u/OyXE6FjyrxzrLbg63zf3x+bAaGd0Lm4nCTDBWi1sAB5nt3cdY9ewtq2uaPNUSD6uRtVXz2Yzdp8hYgfYw6737mCwN7j3ujy0H6ywreyEv0dAnaGRjOgZD+hQZyNwP65A+zTa3FGpOEMfNYnpZ/qDB/YVFYvZKyib355WKVedWQ0cXvXsQ1qmp5VkE72EYWp7N9hRbJEauls/c8riEGCkdaXoEJubsh2eQHoZlovRrMzcoKwPSM4iRY/ou91cVDqRnECOlH25yf1bZGCl9F9F7KEYGckjZwjFS+jWkh2Kk9BwqcqEYOaZDejhmSseESyhmSsciilDMlL4N6WGYGcj1ID0MM6Ufc39W2Zgp/TB7hwwlwUzpL065v6tozAzkkLOFYqh05GxhGCq9CekhGCr9BNJDMDOQy11jB2MIhkrHlEsYpkpHJBeCoWO67EKs5d6+4suSluPvTJV+InNQt4a2G2f1arXV7B0fn+yOOT4+bjar1Wr9rDG0TynfVOk5gSumRrpbjuvdsKv0XuyeHPda9bNTi+pSOWOlCxvUHYGnm63mQZLDvXYPetVNCvWmBnKyBnVrqbG53ZzvCIjD3vZmQ21vb6z0nMqvtBhOr37ZW/B+ld62wiZvrnQhmbqjqrqt5qDOF82qGvHmSpexZMpRrjZq6im4EN7YQC53LEC6ZdWb6u+8vm7WF2vw5kr/sq5K3fwfd7NLdRTvSXdzfvHmSmdP2qyleo/yavvr3tmcPb25Y3ruQLHEpF+20aI/r+2gOo93g6XnWHepO2manqMZT1qJ+3mTpXP275bOY7tedJN5N1k64/IZ7ZccXydp7wYHck7/zmVdazsfcxJ7CbDR0rnqM9ZSl+eo5eN4ZUijpR9S2w2iyndTTjPG5h6Tx3SuPQ/WGes15oeRhVqzpbPMr1pLl9zvfRB+h43Z0l9whHJWXcIF5mH5qtnSOVJ1MbeXB18sbXQg56QxWn2PvmiLsuCejICYxnDp+kM57WWZcHp+wbzp0g+0Sxcxok9wMpu7my5d+6yLxR66z/Dl9OVVhgdy2jctiwnjvHi/gvHSc3q3ulh1obeVT569ZL50vQV4wbfYHt4XLcyXntMrXWTvPuYupjM+kNNboLGkX2k5jOkyIP1Qp/Q63/xaTC6tLEjXed2uVZdTjgvk0sgbGKf4a23O03ItvfAxSAl/82fapMsN3rPG0+WvNWnPQDKUGl6trn715zq8ZyFESgtPl13+ll47pAvi1epQ+9+Ra4d0ObxcHrH698S9PKQL4q6pO9q/+gtC7ejeRbE8wT+QaRc4m55lnq1OWF+lSuGQp8tia7KtLxOlcFad+zXBJL9YXZ7in9Rrh3RhbK1PW1/+lWrt1tmC58UBtTydaerLy+uKUzjrVPzUasZ4NdvUHe2KUzjWvYtghic+zlWncEjUpfHMp4Mfp3CKvCNnE4dPLKc4hbPOuN8RTPFJUFMfoiSFa3C/I5jm14FNfYiCFE72GuhM8nIrVLqCWTgM6vIIjOXGLJrCYVAXSHAs98BCKVxD2FZl4MRy0c6d5v710tzekakLJLKDHzJ/CpeSpe8ZI47zIXOmcA2e0yJBGJ/EGNXvevm5UjgkbRJ5FauDH/Xyc6Rw6N9FEtu529q/Sr5cHv27QMKrsbMkTOGwt0kkCTr4UXNPNgu3yf1+wI9kzpcTpnBWFrYCp4/XCZv6sLnHHtwRysnEd+lUZHOPm8I1sFJOIt9ETLcFaY+XwmGqTSZ+a2PjEC+FOxV6hGDWSRrBTxC94xmzLkKJWEUTRvRCys0UnDKVRZ7O7Xw5OoVDUxfK7O62ZITNwmEBjVQW6OBHzf1Xwb085tqE8j7O2qlw7cG9/Cn32wF/ks68+BGUwmFUl0q8tVNRBKRw3C8HAli4gx+y6reQEufPSGXOcuys9q/+cVY7DigQSvwVc5FMp3BWi/vlQABqhvUhMwspMa8uFTXD+p12bwqHY4fEos75kIkUDhUasbxWbH0ihTvFvItUFA7rI9a/vuvlEcvJZYG59QDG5w5jjaRcFGXrXtwUDrNtglEYwT/gnjuMnQ9yeU1ifTgLh5WxYlEezN2xtfHP3K8GAlEfzN2x+ozrlT5+ZAgfk30ilZU5r/WXZM8cwdXaihGs7ZF9Iqqmvr5F9shRfFAwhDWqL/SerIN/RfXIkZhj/Q3RF1KxesrfOlsHb5B1qoGdLJhbJnrgGBhjfeVDoi8012bWGKzzdfAGWf+I6AtRhfB8eZtB1gsf0Hyg91R52/p7mgeOgznWC29JPtATA4d1g6wTBfHzblyPgjFvM8r6pyQfiKoKzzmsG2R95RHJB1p0X2MgT0keNx4GWacJ4smskzxtTGA9AiLr678medqYwHo4i+9h9od1WDfIeuGKInV7SeLcsf4LgoeNjUHW9z4n+D5UidsWZzBnkvW1zwi+zzwHicayTvCs8THI+gqFdaJ5VsYVFS4GWSeZayUq0rBW5oyyTlKmIZpd5w3mjLJOMcNOlK6vfkLwrPExyDrJXCtVae41wbPGB9bDIbK+9YTgWeMD6+HQlOaYQ3ijrF+p/zzfwLp09tSvq4i6cR3W2SEoyRJZZ07XjbJeUF+cIyrI8s64mWV9RX1xjso6b5HGKOsEJVkq67xFGlgPh2jyZZW3SAPr4cC6eAimX2BdPOmxvs66kgbWI1j0bqcAmMvwZllXP9UK6+KB9bjAeiiwLh5YjwushwLr8lE/wQ7r8oH1mMB6KLAuH/XWiWpzsK6Q1FhHHV4hsB4TWA8F1uUD6zGB9VCwgko+6je/YLWkeAgqssov67yzjpXRyiCwTrX3BbsglEFg/Ql2PEmH4tgC7G6Uzspj9d+HyvoP6h81AUZZJziYhurUAr6bflxgPRycSyOdNFnHGVSqoDhwjurkMd6EHdbDITplkPegcFiPACeKSofCOtmZ0d+of9b4mGSd4IQSMuu8xwyaZJ3igHiikixuBVDGFcGNbkQHzuEGEGWQ3NlJddsPazgH6xHgZi/hkFgnu36dM5yD9QiIdr/gxk5FkNwKQJa6sVbnTLJOML2Om7ilQ3Lbj5O6EUnnPIfKIOskN3vRBfGcA7tB1klu8XOCeCLrnAO7QdYLFDd2EqZuqySPGwuDrJPczkt3ZyfnKipzrBPdv577hso641YIWI+ELHXjK8XDeiRklfhVttzNIOsU17S60IVzbF28QdZpEjeyBZPLG9/9yw3RI0dxtbaiHRrrawRrKoa8pOnhN77YKV4QPXIUjx5r59EejXaaxM2BxPrGtz/L2x2qR5bHb2msk8yzDiFYRLWx9a8/y+fzFa4uXj8fk0gnC+EpBvaNL37nSs8X22QPLY1HJAM7oXXlCyvWv92xXel5+4jsoaXxIYl1mnnWIS8VO1/+/bChu9TOyZ5aGDTDOlkI76B0in3ju9/dS88XS3RPLYq3JNILa4SPrHKydeP7nQfpTmMnfGxJ0AzrhT3CR1Y3sK+7CdskdkbiOZphnWap5B2vVXXxdwnbpPUK4XMLgmZYJ7WuamDf+OLfpqQ72rnqc3qh6eAJ7l6fQM2028a39rRzx3qZ8sGl8JioDE9Wj3VRMbBvbP1+pqEPtfMeQqaHj4iskz60goF947vpIX1sPQvFeBrnhJW5IQuX4qcSNg/mF+M/W6OxTrLv5YFFM/aNfw90noXGTtXBUy2kuWOxQ4lmEzYvz2kfnp23RHPrBcJ6rMtCJ4ZvfBHcu2eisRN18KSVuSEL5G7T5bhZTJ+DIergaWs0LnPPsQclbBlq7J+TOC8U1oiHdaeLn9N6YMLmxegC3SOiDp7ipLkp5svdwhK2ycZudIGOah02+bA+56r4jf+M49xlQP8GXHxMlLZR12hc5ujiN5Zj9e5DDJ56o0rWyba9TJI4d4tK2Lx9vLGLaj6lcV7QMawn7+LXIxM2r3ZT67I06ykcrn6r4emTHUa1sfUfiaQbG9C9IXKuZVjPJeviPUsi41EcaHkL3VDNrFMuip4kQRcfM2HzUjFyop2qBF8ofKrl+WPf2bq+HjLDFtLYTazQkTV1wh1uXmJ28VEzbIGYuISOTDp9Ef6OeLX4RAmbl5pxfTxZAE91ztwssaZbEyZs3sZuWh//hkx6YY94bv2B6OnWxAnblPa+rlfRA1VZTlve5hK5VHaOhM1LzahlNVQV+IKOWdZ73kd08Rvf2z4r3hM1dqO2Nn9AZ31F42uEpuzry3MlbF5M2uRKl7Xp7OBzuaehQ/qcCduUdmPSN6olNEPrxGuivQSvrVggYfNSM2Uahi6Uo923PkvgCumwBe/JMGWXK9GO9RG6CnMjAuK5BRO2Ke1GzL6RzbW56O3gA+pzCydsU9pNiOgI4/cC1VUAgfhd/rP+/Y5C53kjDrB4TLUudojeDj7ns+NNScI2TdoD+U9JW7qWFXMeppfUKErYpkh5IE+2sW2Evhr8Pd7kTVnC5sVO99lUlEmb5hLNHZ5ivLqEbVp7mvO3D0kHdeLTaAJ4aOxKE7Zp7emtyJNm6g57OhbHTvNs/b53V5qwTWtPa9pOczr0A9pW0XjZuk/YCKWnVvvntJFcQc/uh1mGlZr19dh72LKlfY+4f9efrI94skWVsBmg/Ypausb1FF6erRIlbDPaUxfS0RZiXfZITxYM4cnWAksik2lPWQJHm6i7MMVyLv+lSbqrPU0r6eilF1b01+XGPK/psu5oT09NXod0hrrcPaWiPu21AeOLJuAt/ZiucfODHz/oa+wOqVglr0W6jrNoQujra+zpWGbxljxPd9E/x+pFa2Mvis/g6M4h8cDb1HO5ts7GLj6Uf6RHOmPadkdlwW0uCbXnJa+qIp5afYCrQnPPQKf0vOQNr280ZGxD+Jt6LnektbG7vbzMQ4Y/0xLHuezpOZQklAu90t3MXWIK91iTchlNPZfraG7sTixflraK8s1Huob0gq7zhyLQWJcdI61Q93FBV+8upanrzt5GFMuCDq8p/+GXP9dmXfeGl0B0B3QutpgCbTtv7+z/lS7tUpp6LneuX3peyjTc+ehHfv9PBU3e+aZYp+kw9PFuc+9wl+p+6OTv+rn9P2rp5eU09ZzmcvyE91qfdXjvVx5+3Pd//Esd2jlfd5oBS2N3KFb4SrQDbzV6Z+e/ybXr3rEeQZkhoBt75xnez4+K0++8/xP54M7yqoHcsBgfYheP9Hs/L884z7u9PO3gzj2vPkObrbEPvQ+0vuxgtp2P2HlHOrhfaX3LOHAk7ffYdkVf+t6vhJyi+I4yhePYxRrOLVMcP8aulXRMxl2UauE/3nQpHOvC2CD6nI3dpVgrD2hf8aZ9VIvMVuhSOBHTLtPwxfFjnI6esMFfdMK69geIUjhhWduYG+Y+fkgxX25TzMPedioBEZwPJCncFfu6KX84Jt9mcdpjWXHp5jyJcheCFE7TZU5zwFOPn8Uu2uWSohZ/U+rkkyl3UT4LJzKUu0PvitkwbNuudfoLzs7cljo1e87D7t/9Rm0vr0YQCTxzrkE44h3z8xXubtul8nC0mBulKRzbIQWxKIlp7HfYxVqt0mkP4rf620G7VKnM3cYfUJjCrTCdRxIX/vTNB2ecr1Uqnf7g4uJ5wNTsze3FxaDdKbu+iwsLH6EwhROZqj9wI2don8YuFl37R2WX0h394b8dHQ1lq9J9zzs1KZyotRS+nEvI2sOw/aD6n+2rWEgpvX930bq7WTw7OwpSOOH9+xD92yJEs79oCiduVt0fuUM7Cwv28pLrM5MwLqwRyU5tkRRuT8q2hyi073gUjpPCzd/UxdbfZ+hzf2dp7P80Zy+/Jj5pm0DKPIwY9v/wP3Npl7dULowytHuZM4WTs8EpFqyrJ0Xy7qefJ/WeokF9xG3EqsIMkjiFk1+JnUHWrKsIdiqJUri0ZOoekL/NkCyFu0rZoD6Ccz+MVJKkcJxHBC+AuDUWAtj/MWYKJ3v5TBhI22eJuZByTeby91hg/s2Hd7+JTuFSGcndg2qND9EpXBoWUoQB7T5EpXArbFc4qULk+kludnb+FGZ9L6Xh+wRo7X7s/+9ecHNPWyHWD7R2P0JSuNTmbB6g3Y+gFC69ifoU6OR98d0LZ4x0aA/AJ4VLc3VmBnTyvsykcCmcXA0DxVlfplI4w6SjOBvE/h8fUjjjpGMGLoiHFM5A6VgvHcR4IWWqVkHHR/flb6lhmMIZKt3d5oxe3pf9H39pUJ4+zfMKQnlfdmr/x+2GkBvUa/yRcnkREUjcZ7Frkm8dVkKJ+xuLQ9qthCQMENN5sCu33Ep0gJhukuIRtw9dYHC/pyj2Rnn1sN8hIIWi4cG7FxRsXDIQvHu5wZS7M6TruKtGFqV8xr3bZW4FHAyyfTKdnakhfYIM9/J2TcJN4jy0s9rLZ7N3v+coi6m7bfpsSyT97OVwdiV7sfs055kb3TNUjguhn6XRPRMzbLE4z9ChhJ2Aq2eySEZGdzR0Lzed5Fckpo4sTbDF5ML0afdiJbuFmRCMrszb+RL39xXK846p3m27nIl1UvMxMDOatysZm0hPSt+8mTi7hs49kpJZWZxtdxRdBm84HbpLNHVjFzGgx8YQ745zTLQk4MaAcN4uHiFDT8htyr3bxcqA+xumkfNOeuM6O18ecH+/tHKbUu9wvhg3pUrqAjs738F4vijtSpqm45yfUUyhK+EiNYmcE8JlfSGkSkppaPDFPNJzxVyU86In4J1mXkLpVT23fbGRnaMcERwZAyeVEyfeLtbKbTRzUtplUeKdZznqY4JFA/1yXoZ427aPSgjgtNHu5LmDetsulrFcQjcXHSebYzJvu+HbgPsLZJTbfrmm3bztRm8lDOWcPHeafE1bZ+8aP+pcPOd+a5DLnQ8c8zZ1m7eL+UqlP0AjF8RN2+ntqdQ7f2ut0umjDiOS236pPJSkyv3ob3KED7hfDUQwKHXKthPkLSLf+bNF55+jTgdVtzRx2+50ypWiQ2z/w9/o/ol8pdzpDBCzpZab83apXC4fOYG++wMw/iF44O6/uqHakfMbO/3z51gVYQo3N+cOF4NBu+SlPRgM3F+6vYFsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKSH/wfGue+JbKpFQQAAAABJRU5ErkJggg==",
+    url: disneyImage,
     projection: new Projection({
       code: "xkcd-image",
       units: "pixels",
     }),
     imageExtent: imageExtent,
+  }),
+  className: "disney",
+});
+
+//作ったwebメルカルト地図
+var mapExtent = fromLonLat([139.865957, 35.617521]).concat(
+  fromLonLat([139.904628, 35.64006])
+);
+
+var mapMinZoom = 13;
+var mapMaxZoom = 16;
+var layer = new Tile({
+  extent: mapExtent,
+  source: new XYZ({
+    url: "./maps/{z}/{x}/{y}.png",
+    tilePixelRatio: 1.0,
+    minZoom: mapMinZoom,
+    maxZoom: mapMaxZoom,
   }),
 });
 
@@ -75,12 +112,11 @@ const map = new Map({
     new TileLayer({
       source: new OSM(),
     }),
-    vectorLayer,
-    imageLayer,
+    layer,
   ],
   view: new View({
-    center: [0, 0],
-    zoom: 4,
+    center: fromLonLat([139.86605288747617, 35.63996853858424]),
+    zoom: 10,
   }),
 });
 
